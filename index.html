@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101827">
+<title>TouchScale Lab — Sensor Explorer</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#121d2e;--panel2:#172438;--line:#26364d;--text:#edf4ff;--muted:#9aabc2;--accent:#73d5c3;--blue:#83b8ff;--warn:#ffd27d}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#0b1220,#101b2b 65%,#0c1725);color:var(--text);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:1100px;margin:auto;padding:24px 16px 50px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+h1{font-size:clamp(27px,5vw,40px);letter-spacing:-1.2px;margin:0}.sub{color:var(--muted);margin-top:5px}.tag{border:1px solid #35675f;color:var(--accent);padding:6px 10px;border-radius:99px;font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.card{background:rgba(18,29,46,.94);border:1px solid var(--line);border-radius:17px;padding:16px;min-width:0;box-shadow:0 10px 30px #0002}.wide{grid-column:1/-1}
+h2{font-size:17px;margin:0 0 10px}.hint{color:var(--muted);font-size:13px;margin:5px 0 12px}
+button{border:0;border-radius:11px;background:var(--accent);color:#071713;font-weight:700;padding:11px 14px;font-size:14px;cursor:pointer}
+button.secondary{background:#263850;color:var(--text);border:1px solid #3a506c}button.warn{background:#6b4d20;color:#fff0d2}button:disabled{opacity:.45;cursor:not-allowed}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}canvas{width:100%;height:150px;display:block;background:#0a1422;border:1px solid #24344a;border-radius:10px}
+.metricrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.metric{background:#0b1625;border:1px solid #24344a;border-radius:10px;padding:10px}.metric b{display:block;font-size:19px;font-variant-numeric:tabular-nums}.metric span{font-size:11px;color:var(--muted)}
+.status{font-size:13px;color:var(--muted);margin-top:9px;min-height:19px}.status.good{color:var(--accent)}.status.bad{color:#ff9b9b}
+label{display:block;color:var(--muted);font-size:12px;margin:10px 0 5px}input,select{background:#0a1422;color:var(--text);border:1px solid #344963;border-radius:9px;padding:10px;width:100%;font:inherit}
+input[type=range]{padding:0;accent-color:var(--accent)}.readout{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}.axis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.note{background:#18263a;border-left:3px solid var(--warn);padding:11px 13px;border-radius:8px;color:#dce7f7;font-size:13px}
+footer{color:var(--muted);font-size:12px;margin-top:18px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.metricrow{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div><h1>TouchScale Lab</h1><div class="sub">Version 0.1 · Sensor discovery, not a weighing scale yet</div></div>
+    <span class="tag">NO EXTRA HARDWARE</span>
+  </header>
+  <div class="note">Safety: keep the iPad flat on a stable, padded surface. Do not place heavy, sharp, hot, wet, or concentrated-load objects on the display. This app does not measure weight or guarantee ±1 g accuracy.</div>
+  <section class="grid" style="margin-top:14px">
+    <article class="card">
+      <h2>1. Microphone & audio response</h2>
+      <p class="hint">Request microphone access and inspect ambient sound. Headphones/Bluetooth can change audio routing; use the built-in microphone where possible.</p>
+      <div class="controls"><button id="micStart">Enable microphone</button><button class="secondary" id="micStop" disabled>Stop</button></div>
+      <canvas id="wave" width="900" height="240"></canvas>
+      <div class="metricrow">
+        <div class="metric"><b id="rms">—</b><span>RMS level</span></div>
+        <div class="metric"><b id="peak">—</b><span>Peak frequency</span></div>
+        <div class="metric"><b id="sampleRate">—</b><span>Sample rate</span></div>
+      </div>
+      <div class="status" id="micStatus">Microphone not started.</div>
+    </article>
+    <article class="card">
+      <h2>2. Frequency spectrum (FFT)</h2>
+      <p class="hint">Live spectrum from the microphone. Peaks are acoustic energy, not direct measurements of object mass.</p>
+      <canvas id="spectrum" width="900" height="400"></canvas>
+      <div class="controls" style="margin-top:10px">
+        <label style="margin:0;min-width:120px">FFT size</label>
+        <select id="fftSize" style="width:auto"><option>2048</option><option selected>4096</option><option>8192</option></select>
+      </div>
+      <div class="status" id="fftStatus">Waiting for microphone.</div>
+    </article>
+    <article class="card">
+      <h2>3. Device motion</h2>
+      <p class="hint">Read motion sensors if Safari grants permission. iOS may require this button to be tapped directly.</p>
+      <div class="controls"><button id="motionStart">Enable motion</button><button class="secondary" id="motionStop" disabled>Stop</button></div>
+      <div class="axis" style="margin-top:12px">
+        <div class="metric"><b id="ax">—</b><span>Acceleration X (m/s²)</span></div>
+        <div class="metric"><b id="ay">—</b><span>Acceleration Y</span></div>
+        <div class="metric"><b id="az">—</b><span>Acceleration Z</span></div>
+      </div>
+      <div class="axis" style="margin-top:8px">
+        <div class="metric"><b id="rx">—</b><span>Rotation α (°/s)</span></div>
+        <div class="metric"><b id="ry">—</b><span>Rotation β</span></div>
+        <div class="metric"><b id="rz">—</b><span>Rotation γ</span></div>
+      </div>
+      <canvas id="motionChart" width="900" height="240" style="margin-top:12px"></canvas>
+      <div class="status" id="motionStatus">Motion not started.</div>
+    </article>
+    <article class="card">
+      <h2>4. Experiment log</h2>
+      <p class="hint">Record baseline and test runs with labels. Use the same iPad position, surface, volume, and room conditions for comparisons.</p>
+      <label for="runLabel">Run label / known mass (e.g. baseline, 10 g)</label>
+      <input id="runLabel" placeholder="baseline">
+      <div class="controls" style="margin-top:10px">
+        <button id="capture">Capture 5-second run</button>
+        <button class="secondary" id="export" disabled>Export CSV</button>
+        <button class="secondary" id="clear">Clear log</button>
+      </div>
+      <div class="metricrow">
+        <div class="metric"><b id="runCount">0</b><span>Runs saved</span></div>
+        <div class="metric"><b id="motionRate">—</b><span>Motion event rate</span></div>
+        <div class="metric"><b id="duration">5 s</b><span>Capture duration</span></div>
+      </div>
+      <div class="status" id="logStatus">Enable sensors before capturing a run.</div>
+      <div id="logList" class="hint" style="margin-top:12px">No runs yet.</div>
+    </article>
+    <article class="card wide">
+      <h2>5. Controlled audio sweep (optional)</h2>
+      <p class="hint">Plays a quiet sine sweep through the selected audio output. Start at low volume. It is not a calibrated shaker and may not excite the iPad's mechanical modes reliably.</p>
+      <div class="controls">
+        <button id="sweepStart">Play 100–2,000 Hz sweep</button>
+        <button class="secondary" id="sweepStop" disabled>Stop sweep</button>
+      </div>
+      <label for="volume">Sweep level <span id="volumeText">5%</span></label>
+      <input id="volume" type="range" min="1" max="10" value="5">
+      <div class="status" id="sweepStatus">Sweep stopped.</div>
+    </article>
+    <article class="card wide">
+      <h2>How to run Experiment 001</h2>
+      <ol class="hint">
+        <li>Place the iPad flat on the same stable surface. Remove any case if safe and practical; do not change setup midway.</li>
+        <li>Enable microphone and motion permissions. Keep the room quiet.</li>
+        <li>Record at least five baseline runs with nothing on the iPad.</li>
+        <li>Only if safe, repeat with a small, broad, soft-bottomed object of independently known mass. Avoid point loads and anything that can scratch or crack the glass.</li>
+        <li>Export the CSV and compare runs. Look for repeatable differences larger than baseline variation.</li>
+      </ol>
+      <div class="note">Important interpretation: the browser cannot read raw touchscreen capacitance, display strain, or a direct static force signal. A repeatable acoustic/motion signature is only an indirect proxy. If the signal does not separate from baseline noise, this hardware-free approach cannot meet the target.</div>
+    </article>
+  </section>
+  <footer>Runs are kept only in this page's memory until exported. Microphone access requires a secure context (HTTPS or localhost) and your permission. This prototype does not upload recordings.</footer>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let audioCtx=null, stream=null, analyser=null, source=null, raf=null, motionOn=false, sweepOsc=null, sweepGain=null, sweepTimer=null;
+  let latest={rms:null,peak:null,sampleRate:null,ax:null,ay:null,az:null,rx:null,ry:null,rz:null};
+  let runs=[], motionEvents=0, motionStartTime=0, motionHistory=[];
+  const fmt=(v,n=3)=>Number.isFinite(v)?v.toFixed(n):"—";
+  function drawLine(canvas, values, color="#73d5c3"){
+    const c=canvas.getContext("2d"),w=canvas.width,h=canvas.height;c.clearRect(0,0,w,h);
+    c.strokeStyle="#26364d";c.lineWidth=1;
+    for(let i=1;i<4;i++){c.beginPath();c.moveTo(0,h*i/4);c.lineTo(w,h*i/4);c.stroke()}
+    if(!values||values.length<2)return;
+    c.strokeStyle=color;c.lineWidth=2;c.beginPath();
+    values.forEach((v,i)=>{const x=i/(values.length-1)*w,y=h/2-(v||0)*h*.42;if(i===0)c.moveTo(x,y);else c.lineTo(x,y)});c.stroke();
+  }
+  function drawSpectrum(){
+    if(!analyser)return;
+    const data=new Uint8Array(analyser.frequencyBinCount);analyser.getByteFrequencyData(data);
+    const c=$("spectrum").getContext("2d"),w=$("spectrum").width,h=$("spectrum").height;c.clearRect(0,0,w,h);
+    c.strokeStyle="#26364d";for(let i=1;i<5;i++){c.beginPath();c.moveTo(0,h*i/5);c.lineTo(w,h*i/5);c.stroke()}
+    const maxHz=Math.min(5000,audioCtx.sampleRate/2), bins=Math.floor(maxHz/(audioCtx.sampleRate/analyser.fftSize));
+    let max=0,maxI=0;
+    c.fillStyle="#83b8ff";
+    for(let i=1;i<bins;i++){const x=i/bins*w,bar=data[i]/255*h*.9;c.fillRect(x,h-bar,Math.max(1,w/bins-1),bar);if(data[i]>max){max=data[i];maxI=i}}
+    const freq=maxI*audioCtx.sampleRate/analyser.fftSize;
+    latest.peak=freq;$("peak").textContent=freq>0?Math.round(freq)+" Hz":"—";
+    $("fftStatus").textContent=`Peak bin: ${Math.round(freq)} Hz · Display limited to ${maxHz} Hz`;
+  }
+  function loop(){
+    if(!analyser)return;
+    const data=new Uint8Array(analyser.fftSize);analyser.getByteTimeDomainData(data);
+    let sum=0;const vals=[];
+    for(let i=0;i<data.length;i++){const v=(data[i]-128)/128;sum+=v*v;if(i%4===0)vals.push(v)}
+    latest.rms=Math.sqrt(sum/data.length);$("rms").textContent=fmt(latest.rms,4);
+    drawLine($("wave"),vals);drawSpectrum();raf=requestAnimationFrame(loop);
+  }
+  $("micStart").onclick=async()=>{
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});
+      audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+      await audioCtx.resume();source=audioCtx.createMediaStreamSource(stream);analyser=audioCtx.createAnalyser();
+      analyser.fftSize=Number($("fftSize").value);analyser.smoothingTimeConstant=.15;source.connect(analyser);
+      latest.sampleRate=audioCtx.sampleRate;$("sampleRate").textContent=audioCtx.sampleRate+" Hz";
+      $("micStatus").textContent="Microphone active. Keep the room quiet and setup unchanged.";$("micStatus").className="status good";
+      $("micStart").disabled=true;$("micStop").disabled=false;loop();
+    }catch(e){$("micStatus").textContent="Microphone unavailable: "+e.message;$("micStatus").className="status bad"}
+  };
+  $("micStop").onclick=()=>{if(raf)cancelAnimationFrame(raf);if(stream)stream.getTracks().forEach(t=>t.stop());if(audioCtx)audioCtx.close();stream=null;audioCtx=null;analyser=null;source=null;$("micStart").disabled=false;$("micStop").disabled=true;$("micStatus").textContent="Microphone stopped.";};
+  $("fftSize").onchange=()=>{if(analyser)analyser.fftSize=Number($("fftSize").value)};
+  function onMotion(e){
+    const a=e.acceleration||{},r=e.rotationRate||{};
+    latest.ax=a.x;latest.ay=a.y;latest.az=a.z;latest.rx=r.alpha;latest.ry=r.beta;latest.rz=r.gamma;motionEvents++;
+    $("ax").textContent=fmt(a.x);$("ay").textContent=fmt(a.y);$("az").textContent=fmt(a.z);
+    $("rx").textContent=fmt(r.alpha);$("ry").textContent=fmt(r.beta);$("rz").textContent=fmt(r.gamma);
+    if(Number.isFinite(a.x))motionHistory.push(a.x);if(motionHistory.length>180)motionHistory.shift();
+    drawLine($("motionChart"),motionHistory);
+  }
+  $("motionStart").onclick=async()=>{
+    try{
+      if(typeof DeviceMotionEvent==="undefined")throw new Error("DeviceMotionEvent is not supported in this browser.");
+      if(typeof DeviceMotionEvent.requestPermission==="function"){
+        const p=await DeviceMotionEvent.requestPermission();if(p!=="granted")throw new Error("Motion permission was not granted.");
+      }
+      window.addEventListener("devicemotion",onMotion);motionOn=true;motionEvents=0;motionStartTime=performance.now();
+      $("motionStatus").textContent="Motion sensor active.";$("motionStatus").className="status good";$("motionStart").disabled=true;$("motionStop").disabled=false;
+    }catch(e){$("motionStatus").textContent="Motion unavailable: "+e.message;$("motionStatus").className="status bad"}
+  };
+  $("motionStop").onclick=()=>{window.removeEventListener("devicemotion",onMotion);motionOn=false;$("motionStart").disabled=false;$("motionStop").disabled=true;$("motionStatus").textContent="Motion stopped."};
+  $("volume").oninput=()=>{$("volumeText").textContent=$("volume").value+"%";if(sweepGain)sweepGain.gain.value=Number($("volume").value)/100};
+  $("sweepStart").onclick=async()=>{
+    try{
+      if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+      await audioCtx.resume();if(sweepOsc)sweepOsc.stop();
+      sweepOsc=audioCtx.createOscillator();sweepGain=audioCtx.createGain();sweepOsc.type="sine";
+      const now=audioCtx.currentTime;sweepOsc.frequency.setValueAtTime(100,now);sweepOsc.frequency.exponentialRampToValueAtTime(2000,now+8);
+      sweepGain.gain.setValueAtTime(0,now);sweepGain.gain.linearRampToValueAtTime(Number($("volume").value)/100,now+.15);sweepGain.gain.setValueAtTime(Number($("volume").value)/100,now+7.7);sweepGain.gain.linearRampToValueAtTime(0,now+8);
+      sweepOsc.connect(sweepGain);sweepGain.connect(audioCtx.destination);sweepOsc.start(now);sweepOsc.stop(now+8.05);
+      $("sweepStatus").textContent="Playing an 8-second low-level sweep."; $("sweepStart").disabled=true;$("sweepStop").disabled=false;
+      sweepTimer=setTimeout(()=>{$("sweepStart").disabled=false;$("sweepStop").disabled=true;$("sweepStatus").textContent="Sweep complete."},8200);
+    }catch(e){$("sweepStatus").textContent="Audio output unavailable: "+e.message}
+  };
+  $("sweepStop").onclick=()=>{try{if(sweepOsc)sweepOsc.stop()}catch(e){}clearTimeout(sweepTimer);$("sweepStart").disabled=false;$("sweepStop").disabled=true;$("sweepStatus").textContent="Sweep stopped."};
+  $("capture").onclick=()=>{
+    const label=$("runLabel").value.trim()||"unnamed";
+    const start=performance.now(),snap={label,time:new Date().toISOString(),rms:[],peak:[],motionCount:0,ax:[],ay:[],az:[]};
+    $("capture").disabled=true;$("logStatus").textContent="Capturing for five seconds… keep everything still.";
+    const timer=setInterval(()=>{
+      if(Number.isFinite(latest.rms))snap.rms.push(latest.rms);
+      if(Number.isFinite(latest.peak))snap.peak.push(latest.peak);
+      if(Number.isFinite(latest.ax))snap.ax.push(latest.ax);
+      if(Number.isFinite(latest.ay))snap.ay.push(latest.ay);
+      if(Number.isFinite(latest.az))snap.az.push(latest.az);
+    },100);
+    setTimeout(()=>{
+      clearInterval(timer);snap.motionCount=motionEvents;
+      const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+      const sd=a=>{if(a.length<2)return null;const m=avg(a);return Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/(a.length-1))};
+      runs.push({label:snap.label,time:snap.time,rms_mean:avg(snap.rms),rms_sd:sd(snap.rms),peak_mean_hz:avg(snap.peak),accel_x_mean:avg(snap.ax),accel_y_mean:avg(snap.ay),accel_z_mean:avg(snap.az),motion_events:snap.motionCount,sample_rate_hz:latest.sampleRate});
+      $("capture").disabled=false;$("logStatus").textContent="Run captured. Repeat several times for each condition.";$("logStatus").className="status good";renderRuns();
+    },5000);
+  };
+  function renderRuns(){
+    $("runCount").textContent=runs.length;$("export").disabled=!runs.length;
+    $("logList").innerHTML=runs.length?runs.map((r,i)=>`${i+1}. <b>${escapeHtml(r.label)}</b> — RMS ${fmt(r.rms_mean,4)}, peak ${fmt(r.peak_mean_hz,1)} Hz`).join("<br>"):"No runs yet.";
+  }
+  function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+  $("clear").onclick=()=>{runs=[];renderRuns();$("logStatus").textContent="Log cleared."};
+  $("export").onclick=()=>{
+    const keys=Object.keys(runs[0]);const csv=[keys.join(","),...runs.map(r=>keys.map(k=>{const v=r[k]??"";return '"'+String(v).replace(/"/g,'""')+'"'}).join(","))].join("\n");
+    const blob=new Blob([csv],{type:"text/csv"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="touchscale-lab-runs.csv";a.click();URL.revokeObjectURL(url);
+  };
+})();
+</script>
+</body>
+</html>
